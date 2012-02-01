@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Globalization;
+using CookComputing.XmlRpc;
 using Cornerstone.Extensions.IO;
-using MediaPortal.GUI.Library;
 using MediaPortal.Player;
 using System.IO;
 using NLog;
@@ -22,6 +22,9 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     /// </summary>
   public class MediaInfoWrapper
   {
+
+
+
     #region private vars
 
     private static Logger logger = LogManager.GetCurrentClassLogger();
@@ -38,6 +41,8 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     private string _videoCodec = string.Empty;
     private string _audioCodec = string.Empty;
     private string _audioFormatProfile = string.Empty;
+    private readonly List<AudioInfo> _audioInfo = new List<AudioInfo>();
+    private readonly List<SubtitleInfo> _subtitleInfo = new List<SubtitleInfo>();
     private string _scanType = string.Empty;
     private bool _isDIVX = false; // mpeg4 DivX
     private bool _isXVID = false; // mpeg4 asp
@@ -65,6 +70,7 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     private int _duration = 0;
 
     private bool _hasSubtitles = false;
+    private bool _hasChapters = false;
     private static List<string> _subTitleExtensions = new List<string>();
 
     #endregion
@@ -102,22 +108,6 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         int.TryParse(_mI.Get(StreamKind.Video, 0, "Width"), out _width);
         int.TryParse(_mI.Get(StreamKind.Video, 0, "Height"), out _height);
         int.TryParse(_mI.Get(StreamKind.General, 0, "TextCount"), out _numSubtitles);
-        int intValue;
-        int iAudioStreams = _mI.Count_Get(StreamKind.Audio);
-        for (int i = 0; i < iAudioStreams; i++)
-        {
-            string sChannels = Regex.Split(_mI.Get(StreamKind.Audio, i, "Channel(s)"), @"\D+").Max();
-
-
-            if (int.TryParse(sChannels, out intValue) && intValue > _audioChannels)
-            {
-                
-                _audioChannels = intValue;
-                int.TryParse(_mI.Get(StreamKind.Audio, i, "SamplingRate"), out _audioRate);
-                _audioCodec = _mI.Get(StreamKind.Audio, i, "Codec/String").ToLower();
-                _audioFormatProfile = _mI.Get(StreamKind.Audio, i, "Format_Profile").ToLower();
-            }
-        }
 
         string aspectStr = _mI.Get(StreamKind.Video, 0, "AspectRatio/String");
         if (aspectStr == "4/3" || aspectStr == "4:3")
@@ -179,16 +169,6 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         _isMP4V = (_videoCodec.IndexOf("fmp4") > -1); // add more
         _isWMV = (_videoCodec.IndexOf("wmv") > -1); // wmv3 = WMV9
         // missing cvid etc
-        _isAC3 = (System.Text.RegularExpressions.Regex.IsMatch(_audioCodec, "ac-?3"));
-        _isMP3 = (_audioCodec.IndexOf("mpeg-1 audio layer 3") > -1) || (_audioCodec.IndexOf("mpeg-2 audio layer 3") > -1);
-        _isMP2A = (_audioCodec.IndexOf("mpeg-1 audio layer 2") > -1);
-        _isDTS = (_audioCodec.IndexOf("dts") > -1);
-        _isOGG = (_audioCodec.IndexOf("ogg") > -1);
-        _isAAC = (_audioCodec.IndexOf("aac") > -1);
-        _isWMA = (_audioCodec.IndexOf("wma") > -1); // e.g. wma3
-        _isPCM = (_audioCodec.IndexOf("pcm") > -1);
-        _isTrueHD = (_audioCodec.Contains("truehd") || _audioFormatProfile.Contains("truehd"));
-        _isDTSHD = (_audioCodec.Contains("dts") && (_audioFormatProfile.Contains("hra") || _audioFormatProfile.Contains("ma")));
 
         if (checkHasExternalSubtitles(strFile))
         {
@@ -204,22 +184,16 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         }
 
         logger.Debug("MediaInfoWrapper: inspecting media : {0}", strFile);
+        logger.Debug("MediaInfoWrapper: --- Video Information ---");
         logger.Debug("MediaInfoWrapper: FrameRate : {0}", _framerate);
         logger.Debug("MediaInfoWrapper: VideoCodec : {0}", _videoCodec);
-        if (_isDIVX)
-          logger.Debug("MediaInfoWrapper: IsDIVX: {0}", _isDIVX);
-        if (_isXVID)
-          logger.Debug("MediaInfoWrapper: IsXVID: {0}", _isXVID);
-        if (_isH264)
-          logger.Debug("MediaInfoWrapper: IsH264: {0}", _isH264);
-        if (_isMP1V)
-          logger.Debug("MediaInfoWrapper: IsMP1V: {0}", _isMP1V);
-        if (_isMP2V)
-          logger.Debug("MediaInfoWrapper: IsMP2V: {0}", _isMP2V);
-        if (_isMP4V)
-          logger.Debug("MediaInfoWrapper: IsMP4V: {0}", _isMP4V);
-        if (_isWMV)
-          logger.Debug("MediaInfoWrapper: IsWMV: {0}", _isWMV);
+        if (_isDIVX) logger.Debug("MediaInfoWrapper: IsDIVX: {0}", _isDIVX);
+        if (_isXVID) logger.Debug("MediaInfoWrapper: IsXVID: {0}", _isXVID);
+        if (_isH264) logger.Debug("MediaInfoWrapper: IsH264: {0}", _isH264);
+        if (_isMP1V) logger.Debug("MediaInfoWrapper: IsMP1V: {0}", _isMP1V);
+        if (_isMP2V) logger.Debug("MediaInfoWrapper: IsMP2V: {0}", _isMP2V);
+        if (_isMP4V) logger.Debug("MediaInfoWrapper: IsMP4V: {0}", _isMP4V);
+        if (_isWMV) logger.Debug("MediaInfoWrapper: IsWMV: {0}", _isWMV);
 
         logger.Debug("MediaInfoWrapper: HasSubtitles : {0}", _hasSubtitles);
         logger.Debug("MediaInfoWrapper: NumSubtitles : {0}", _numSubtitles);
@@ -227,30 +201,19 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         logger.Debug("MediaInfoWrapper: IsInterlaced: {0}", _isInterlaced);
         logger.Debug("MediaInfoWrapper: Width : {0}", _width);
         logger.Debug("MediaInfoWrapper: Height : {0}", _height);
-        logger.Debug("MediaInfoWrapper: Audiochannels : {0}", _audioChannels);
-        logger.Debug("MediaInfoWrapper: Audiorate : {0}", _audioRate);
         logger.Debug("MediaInfoWrapper: AspectRatio : {0}", _aspectRatio);
-        logger.Debug("MediaInfoWrapper: AudioCodec : {0}", _audioCodec);
-        if (_isAC3)
-          logger.Debug("MediaInfoWrapper: IsAC3 : {0}", _isAC3);
-        if (_isMP3)
-          logger.Debug("MediaInfoWrapper: IsMP3 : {0}", _isMP3);
-        if (_isMP2A)
-          logger.Debug("MediaInfoWrapper: IsMP2A: {0}", _isMP2A);
-        if (_isDTS)
-          logger.Debug("MediaInfoWrapper: IsDTS : {0}", _isDTS);
-        if (_isTrueHD)
-            logger.Debug("MediaInfoWrapper: IsTrueHD : {0}", _isTrueHD);
-        if (_isDTSHD)
-            logger.Debug("MediaInfoWrapper: IsDTSHD : {0}", _isDTSHD);
-        if (_isOGG)
-          logger.Debug("MediaInfoWrapper: IsOGG : {0}", _isOGG);
-        if (_isAAC)
-          logger.Debug("MediaInfoWrapper: IsAAC : {0}", _isAAC);
-        if (_isWMA)
-          logger.Debug("MediaInfoWrapper: IsWMA: {0}", _isWMA);
-        if (_isPCM)
-          logger.Debug("MediaInfoWrapper: IsPCM: {0}", _isPCM);
+        logger.Debug("");
+
+        // Retrieve Audio Information
+        GetAudioInformation();
+
+        // Retrieve Subtitle Information
+        GetSubtitleInformation();
+
+        int numMenus;
+        if ((int.TryParse(_mI.Get(StreamKind.General, 0, "MenuCount"), out numMenus)) && numMenus > 0) _hasChapters = true;
+        logger.Debug("MediaInfoWrapper: Has Chapters: {0}", _hasChapters);
+
       }
       catch (Exception ex)
       {
@@ -267,7 +230,146 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
 
     #endregion
 
+    #region internal methods
+
+    /// <summary>
+    /// Retrieve friendly Audio Channels Name
+    /// </summary>
+    /// <param name="channels">Channels</param>
+    /// <returns></returns>
+    internal static string GetAudioChannelsFriendly(int channels)
+    {
+        switch (channels)
+        {
+            case 8:
+                return "7.1";
+            case 6:
+                return "5.1";
+            case 2:
+                return "stereo";
+            case 1:
+                return "mono";
+            default:
+                return channels.ToString();
+        }
+    }
+
+    #endregion
+
     #region private methods
+
+    /// <summary>
+    /// Retrieve information about Audio Streams
+    /// </summary>
+    private void GetAudioInformation()
+    {
+        logger.Debug("MediaInfoWrapper: --- Audio Information ---");
+        int intValue;
+        int iAudioStreams = _mI.Count_Get(StreamKind.Audio);
+        for (int i = 0; i < iAudioStreams; i++)
+        {
+            string sChannels = Regex.Split(_mI.Get(StreamKind.Audio, i, "Channel(s)"), @"\D+").Max();
+
+            if (int.TryParse(sChannels, out intValue))
+            {
+                var audioInfo = new AudioInfo { AudioChannels = intValue };
+                if (int.TryParse(_mI.Get(StreamKind.Audio, i, "SamplingRate"), out _audioRate)) { audioInfo.AudioRate = _audioRate; }
+                audioInfo.AudioCodecOriginal = _mI.Get(StreamKind.Audio, i, "Codec/String").ToLower();
+                audioInfo.AudioFormatProfile = _mI.Get(StreamKind.Audio, i, "Format_Profile").ToLower();
+                audioInfo.AudioLanguage = _mI.Get(StreamKind.Audio, i, "Language");
+                audioInfo.AudioLanguageMore = _mI.Get(StreamKind.Audio, i, "Language_More");
+                audioInfo.AudioStreamIndex = i;
+                audioInfo.AudioTitle = _mI.Get(StreamKind.Audio, i, "Title");
+                _audioInfo.Add(audioInfo);
+
+                logger.Debug("MediaInfoWrapper: AudioStreamIndex: {0}", audioInfo.AudioStreamIndex);
+                logger.Debug("MediaInfoWrapper: AudioCodec: {0}", audioInfo.AudioCodecOriginal);
+                logger.Debug("MediaInfoWrapper: AudioRate: {0}", audioInfo.AudioRate);
+                logger.Debug("MediaInfoWrapper: AudioChannels: {0}", audioInfo.AudioChannels);
+                logger.Debug("MediaInfoWrapper: AudioFormatProfile: {0}", audioInfo.AudioFormatProfile);
+                logger.Debug("MediaInfoWrapper: AudioLanguage: {0}", audioInfo.AudioLanguage);
+                logger.Debug("MediaInfoWrapper: AudioLanguageMore: {0}", audioInfo.AudioLanguageMore);
+                logger.Debug("MediaInfoWrapper: AudioTitle: {0}", audioInfo.AudioTitle);
+
+                if (audioInfo.IsAC3)
+                    logger.Debug("MediaInfoWrapper: IsAC3 : {0}", audioInfo.IsAC3);
+                if (audioInfo.IsMP3)
+                    logger.Debug("MediaInfoWrapper: IsMP3 : {0}", audioInfo.IsMP3);
+                if (audioInfo.IsMP2A)
+                    logger.Debug("MediaInfoWrapper: IsMP2A: {0}", audioInfo.IsMP2A);
+                if (audioInfo.IsDTS)
+                    logger.Debug("MediaInfoWrapper: IsDTS : {0}", audioInfo.IsDTS);
+                if (audioInfo.IsTrueHD)
+                    logger.Debug("MediaInfoWrapper: IsTrueHD : {0}", audioInfo.IsTrueHD);
+                if (audioInfo.IsDTSHD)
+                    logger.Debug("MediaInfoWrapper: IsDTSHD : {0}", audioInfo.IsDTSHD);
+                if (audioInfo.IsOGG)
+                    logger.Debug("MediaInfoWrapper: IsOGG : {0}", audioInfo.IsOGG);
+                if (audioInfo.IsAAC)
+                    logger.Debug("MediaInfoWrapper: IsAAC : {0}", audioInfo.IsAAC);
+                if (audioInfo.IsWMA)
+                    logger.Debug("MediaInfoWrapper: IsWMA: {0}", audioInfo.IsWMA);
+                if (audioInfo.IsPCM)
+                    logger.Debug("MediaInfoWrapper: IsPCM: {0}", audioInfo.IsPCM);
+
+                logger.Debug("");
+            }
+        }
+
+        FillDefaultAudioInformation();
+    }
+
+    /// <summary>
+    /// Provide default Audio Information, for compatibility with the "old" Audio information method
+    /// </summary>
+    private void FillDefaultAudioInformation()
+    {
+        // Get "best" stream (most channels)
+        var maxAudioChannels = _audioInfo.Max(channels => channels.AudioChannels);
+        var bestAudioStream = _audioInfo.Where(info => info.AudioChannels == maxAudioChannels).First();
+
+        _audioChannels = bestAudioStream.AudioChannels;
+        _audioCodec = bestAudioStream.AudioCodec;
+        _audioFormatProfile = bestAudioStream.AudioFormatProfile;
+        _audioRate = bestAudioStream.AudioRate;
+
+        _isAC3 = bestAudioStream.IsAC3;
+        _isMP3 = bestAudioStream.IsMP3;
+        _isMP2A = bestAudioStream.IsMP2A;
+        _isDTS = bestAudioStream.IsDTS;
+        _isTrueHD = bestAudioStream.IsTrueHD;
+        _isDTSHD = bestAudioStream.IsDTSHD;
+        _isOGG = bestAudioStream.IsOGG;
+        _isAAC = bestAudioStream.IsAAC;
+        _isWMA = bestAudioStream.IsWMA;
+        _isPCM = bestAudioStream.IsPCM;
+    }
+
+    /// <summary>
+    /// Retrieve Information about Subtitles
+    /// </summary>
+    private void GetSubtitleInformation()
+    {
+        logger.Debug("MediaInfoWrapper: --- Subtitle Information ---");
+        int intValue;
+        int iTextStreams = _mI.Count_Get(StreamKind.Text);
+        for (int i = 0; i < iTextStreams; i++)
+        {
+            var subtitleInfo = new SubtitleInfo
+                                 {
+                                   Language = _mI.Get(StreamKind.Text, i, "Language"),
+                                   Internal = true
+                                 };
+
+            if (string.IsNullOrEmpty(subtitleInfo.Language)) continue;
+            _subtitleInfo.Add(subtitleInfo);
+
+            logger.Debug("MediaInfoWrapper: Language: {0}", subtitleInfo.Language);
+            logger.Debug("MediaInfoWrapper: Internal: {0}", subtitleInfo.Internal);
+            
+            logger.Debug("");
+        }
+    }
 
     private bool checkHasExternalSubtitles(string strFile)
     {
@@ -322,6 +424,8 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
 
       return false;
     }
+
+    
 
     #endregion
 
@@ -456,6 +560,11 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
 
     #region public audio related properties
 
+    public IEnumerable<AudioInfo> AudioInfo
+    {
+        get { return _audioInfo; }
+    }
+
     public string AudioCodec
     {
       get {
@@ -473,7 +582,7 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
           else if (_isDTS)
               tempCodec = "DTS";
           else if (_isOGG)
-              tempCodec = "OGG";
+              tempCodec = "VORBIS";
           else if (_isAAC)
               tempCodec = "AAC";
           else if (_isWMA)
@@ -500,19 +609,7 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     {
         get
         {
-            switch (AudioChannels)
-            {
-                case 8:
-                    return "7.1";
-                case 6:
-                    return "5.1";
-                case 2:
-                    return "stereo";
-                case 1:
-                    return "mono";
-                default:
-                    return this.AudioChannels.ToString();
-            }
+            return GetAudioChannelsFriendly(AudioChannels);
         }
     }
 
@@ -575,6 +672,114 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         get { return _duration; }
     }
 
+    public bool HasChapters
+    {
+      get { return _hasChapters; }
+    }
+
+    #endregion
+
+    #region public subtitle related properties
+
+    public IEnumerable<SubtitleInfo> SubtitleInfo
+    {
+      get { return _subtitleInfo; }
+    }
+
     #endregion
   }
+
+  /// <summary>
+  /// Information about Audio Streams
+  /// </summary>
+  public class AudioInfo
+  {
+      public int AudioStreamIndex { get; set; }
+      public int AudioRate { get; set; }
+      public int AudioChannels { get; set; }
+      public string AudioCodecOriginal { get; set; }
+      public string AudioFormatProfile { get; set; }
+
+      /// <summary>
+      /// 2-letter ISO 639-1 if exists, else 3-letter ISO 639-2, and with optional ISO 3166-1 country separated by a dash if available, e.g. en, en-us, zh-cn
+      /// </summary>
+      public string AudioLanguage { get; set; }
+      internal string AudioTitle { get; set; }
+
+      /// <summary>
+      /// More info about Language (e.g. Director's Comment)
+      /// </summary>
+      internal string AudioLanguageMore { get; set; }
+
+      /// <summary>
+      /// Is the Audio Stream a commentary stream?
+      /// </summary>
+      public bool AudioIsCommentary
+      {
+        get
+        {
+          return AudioTitle.ToLower().Contains("comment") || AudioLanguageMore.ToLower().Contains("comment");
+        }
+      }
+
+      /// <summary>
+      /// Friendly name for <see cref="AudioChannels"/>
+      /// </summary>
+      public string AudioChannelsFriendly
+      {
+          get
+          {
+              return MediaInfoWrapper.GetAudioChannelsFriendly(AudioChannels);
+          }
+      }
+
+      public string AudioCodec
+      {
+          get
+          {
+              if (IsTrueHD) return "TrueHD";
+              if (IsDTSHD) return "DTSHD";
+              if (IsAC3) return "AC3";
+              if (IsMP3) return "MP3";
+              if (IsMP2A) return "MP2A";
+              if (IsDTS) return "DTS";
+              if (IsOGG) return "VORBIS";
+              if (IsAAC) return "AAC";
+              if (IsWMA) return "WMA";
+              if (IsPCM) return "PCM";
+              return AudioCodecOriginal;
+          }
+      }
+
+      public bool IsAC3 { get { return (System.Text.RegularExpressions.Regex.IsMatch(AudioCodecOriginal, "ac-?3")); } }
+      public bool IsMP3 { get { return (AudioCodecOriginal.IndexOf("mpeg-1 audio layer 3") > -1) || (AudioCodecOriginal.IndexOf("mpeg-2 audio layer 3") > -1); } }
+      public bool IsMP2A { get { return (AudioCodecOriginal.IndexOf("mpeg-1 audio layer 2") > -1); } }
+      public bool IsDTS { get { return (AudioCodecOriginal.IndexOf("dts") > -1); } }
+      public bool IsOGG { get { return (AudioCodecOriginal.IndexOf("ogg") > -1 || AudioCodecOriginal.IndexOf("vorbis") > -1); } }
+      public bool IsAAC { get { return (AudioCodecOriginal.IndexOf("aac") > -1); } }
+      public bool IsWMA { get { return (AudioCodecOriginal.IndexOf("wma") > -1); } } // e.g. wma3
+      public bool IsPCM { get { return (AudioCodecOriginal.IndexOf("pcm") > -1); } }
+      public bool IsTrueHD { get { return (AudioCodecOriginal.Contains("truehd") || AudioFormatProfile.Contains("truehd")); } }
+      public bool IsDTSHD { get { return (AudioCodecOriginal.Contains("dts") && (AudioFormatProfile.Contains("hra") || AudioFormatProfile.Contains("ma"))); } }
+
+  }
+
+  /// <summary>
+  /// Information about Subtitle Streams
+  /// </summary>
+  public class SubtitleInfo
+  {
+      /// <summary>
+      /// 2-letter ISO 639-1 if exists, else 3-letter ISO 639-2, and with optional ISO 3166-1 country separated by a dash if available, e.g. en, en-us, zh-cn
+      /// </summary>
+      public string Language { get; set; }
+      public bool Internal { get; set; }
+
+      public SubtitleInfo()
+      {
+          Internal = true;
+      }
+  }
+
+  
 }

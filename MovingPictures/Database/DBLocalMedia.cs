@@ -434,6 +434,17 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
             }
         } private bool _hasSubtitles;
 
+        [DBFieldAttribute(AllowDynamicFiltering = false)]
+        public bool HasChapters
+        {
+          get { return _hasChapters; }
+          set
+          {
+            _hasChapters = value;
+            commitNeeded = true;
+          }
+        } private bool _hasChapters;
+
         [DBFieldAttribute(AllowManualFilterInput = false)]
         public VideoFormat VideoFormat {
             get {
@@ -449,6 +460,48 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
                 commitNeeded = true;
             }
         } private VideoFormat _videoFormat = VideoFormat.NotSupported;
+
+        #endregion
+
+        #region Private methods
+
+        private void UpdateAudioStreams(MediaInfoWrapper mInfoWrapper)
+        {
+            foreach (var audioStream in mInfoWrapper.AudioInfo)
+            {
+                // Try to see if we need to update an existing entry
+                var dbStream = DBLocalMediaAudioStreams.Get((int)this.ID, audioStream.AudioStreamIndex) ?? new DBLocalMediaAudioStreams();
+
+                dbStream.AudioChannels = audioStream.AudioChannelsFriendly;
+                dbStream.AudioCodec = audioStream.AudioCodec;
+                dbStream.AudioLanguage = audioStream.AudioLanguage;
+                dbStream.AudioStreamId = audioStream.AudioStreamIndex;
+                dbStream.AudioIsCommentary = audioStream.AudioIsCommentary;
+                dbStream.LocalMedia = this;
+
+                dbStream.Commit();
+            }
+        }
+
+        private void UpdateSubtitles(MediaInfoWrapper mInfoWrapper)
+        {
+            foreach (var subtitle in mInfoWrapper.SubtitleInfo)
+            {
+                // Try to see if we already have that entry
+                var dbSubtitle = DBLocalMediaSubtitles.Get((int)this.ID, subtitle.Language, subtitle.Internal);
+                if (dbSubtitle == null)
+                {
+                    dbSubtitle = new DBLocalMediaSubtitles
+                                   {
+                                     Language = subtitle.Language,
+                                     Internal = subtitle.Internal,
+                                     LocalMedia = this
+                                   };
+
+                  dbSubtitle.Commit();
+                }
+            }
+        }
 
         #endregion
 
@@ -529,6 +582,10 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
                 this.AudioChannels = mInfoWrapper.AudioChannelsFriendly;
                 this.AudioCodec = mInfoWrapper.AudioCodec;
                 this.VideoAspectRatio = mInfoWrapper.AspectRatio;
+                this.HasChapters = mInfoWrapper.HasChapters;
+
+                this.UpdateAudioStreams(mInfoWrapper);
+                this.UpdateSubtitles(mInfoWrapper);
 
                 return UpdateMediaInfoResults.Success;
             }
@@ -619,6 +676,13 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
                 return;
 
             deleting = true;
+            
+            logger.Debug("Deleting Audio Streams");
+            DBLocalMediaAudioStreams.DeleteAllForLocalMedia((int)this.ID);
+
+            logger.Debug("Deleting Subtitles");
+            DBLocalMediaSubtitles.DeleteAllForLocalMedia((int)this.ID);
+            
             logger.Info("Removing '{0}' and associated movie.", FullPath);
             foreach (DBMovieInfo currMovie in AttachedMovies) {
                 foreach (DBLocalMedia otherFile in currMovie.LocalMedia) {
@@ -627,6 +691,8 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
                 }
                 currMovie.Delete();
             }
+
+            
 
             base.Delete();
             deleting = false;

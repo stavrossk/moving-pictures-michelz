@@ -2015,7 +2015,11 @@ namespace MediaPortal.Plugins.MovingPictures.MainUI {
         /// <param name="startsWith">the prefix to reset</param>
         public void ResetProperties(string startsWith) {
             logger.Debug("Resetting properties: {0}", startsWith);
-            foreach (string key in loggedProperties.Keys) {
+            
+            // Copy loggedProperties.Keys because loggedProperties enumeration can change in between
+            var keys = loggedProperties.Keys;
+
+            foreach (string key in keys) {
                 if (key.StartsWith(startsWith))
                     SetProperty(key, "");
             }
@@ -2083,6 +2087,8 @@ namespace MediaPortal.Plugins.MovingPictures.MainUI {
                     SetProperty("#MovingPictures.UserMovieSettings.10point_user_rating", (movie.ActiveUserSettings.UserRating.GetValueOrDefault() * 2).ToString());
 
                 PublishDetails(movie.LocalMedia[0], "LocalMedia");
+                PublishAudioDetails(movie.LocalMedia[0]);
+                PublishSubtitleDetails(movie.LocalMedia[0]);
 
                 // publish the selected index in the facade
                 int selectedIndex = browser.SelectedIndex + 1;
@@ -2269,6 +2275,74 @@ namespace MediaPortal.Plugins.MovingPictures.MainUI {
 
                     SetProperty(propertyStr, valueStr, forceLogging);
                 }
+            }
+        }
+
+
+        /// <summary>
+        /// Publishes Audio related Details to the skin
+        /// </summary>
+        /// <param name="localMedia">LocalMedia to Publish Audio Details from</param>
+        private void PublishAudioDetails(DBLocalMedia localMedia)
+        {
+            PublishAudioDetails(localMedia, true);
+        }
+
+        /// <summary>
+        /// Publishes Audio related Details to the skin
+        /// </summary>
+        /// <param name="localMedia">LocalMedia to Publish Audio Details from</param>
+        /// <param name="forceLogging">indicate wether to log all properties</param>
+        private void PublishAudioDetails(DBLocalMedia localMedia, bool forceLogging)
+        {
+            // Reset Properties
+            ResetProperties("#MovingPictures.LocalMedia.AudioStreams");
+
+            // Retrieve Audio Details for LocalMedia
+            var audioDetails = DBLocalMediaAudioStreams.GetAll((int)localMedia.ID);
+
+            // Display Streams
+            for (var i = 0; i < audioDetails.Count; i++)
+            {
+                // Empty Audio = UNKNOWN
+                if (string.IsNullOrEmpty(audioDetails[i].AudioLanguage) || audioDetails[i].AudioLanguage == " ") audioDetails[i].AudioLanguage = "UNKNOWN";
+
+                SetProperty("#MovingPictures.LocalMedia.AudioStreams." + i + ".Enabled", "true", forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.AudioStreams." + i + ".AudioChannels", audioDetails[i].AudioChannels, forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.AudioStreams." + i + ".AudioCodec", audioDetails[i].AudioCodec, forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.AudioStreams." + i + ".AudioLanguage", audioDetails[i].AudioLanguage, forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.AudioStreams." + i + ".AudioIsCommentary", audioDetails[i].AudioIsCommentary.ToString(), forceLogging);
+            }
+        }
+
+        /// <summary>
+        /// Publishes Subtitle related Details to the skin
+        /// </summary>
+        /// <param name="localMedia">LocalMedia to Publish Subtitle Details from</param>
+        private void PublishSubtitleDetails(DBLocalMedia localMedia)
+        {
+            PublishSubtitleDetails(localMedia, true);
+        }
+
+        /// <summary>
+        /// Publishes Subtitle related Details to the skin
+        /// </summary>
+        /// <param name="localMedia">LocalMedia to Publish Subtitle Details from</param>
+        /// <param name="forceLogging">indicate wether to log all properties</param>
+        private void PublishSubtitleDetails(DBLocalMedia localMedia, bool forceLogging)
+        {
+            // Reset Properties
+            ResetProperties("#MovingPictures.LocalMedia.Subtitles");
+
+            // Retrieve Subtitle Details for LocalMedia
+            var subtitleDetails = DBLocalMediaSubtitles.GetAll((int)localMedia.ID);
+
+            // Display Subtitles
+            for (var i = 0; i < subtitleDetails.Count; i++)
+            {
+                SetProperty("#MovingPictures.LocalMedia.Subtitles." + i + ".Enabled", "true", forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.Subtitles." + i + ".Language", subtitleDetails[i].Language, forceLogging);
+                SetProperty("#MovingPictures.LocalMedia.Subtitles." + i + ".Internal", subtitleDetails[i].Internal.ToString(), forceLogging);
             }
         }
 
