@@ -2301,6 +2301,10 @@ namespace MediaPortal.Plugins.MovingPictures.MainUI {
             // Retrieve Audio Details for LocalMedia
             var audioDetails = DBLocalMediaAudioStreams.GetAll((int)localMedia.ID);
 
+            // Some totals / General things
+            SetProperty("#MovingPictures.LocalMedia.AudioStreams.Count", audioDetails.Count.ToString(), forceLogging);
+            SetProperty("#MovingPictures.LocalMedia.HasCommentary", audioDetails.Exists(stream => stream.AudioIsCommentary).ToString(), forceLogging);
+            
             // Display Streams
             for (var i = 0; i < audioDetails.Count; i++)
             {

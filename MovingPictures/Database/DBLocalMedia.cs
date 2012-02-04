@@ -407,6 +407,17 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
             }
         } private string _videoAspectRatio;
 
+        [DBFieldAttribute(Default = "false")]
+        public bool Is3D
+        {
+          get { return _is3D; }
+          set
+          {
+            _is3D = value;
+            commitNeeded = true;
+          }
+        } private bool _is3D;
+
         [DBFieldAttribute(AllowManualFilterInput = false)]
         public string AudioCodec {
             get { return _audioCodec; }
@@ -583,6 +594,7 @@ namespace MediaPortal.Plugins.MovingPictures.Database {
                 this.AudioCodec = mInfoWrapper.AudioCodec;
                 this.VideoAspectRatio = mInfoWrapper.AspectRatio;
                 this.HasChapters = mInfoWrapper.HasChapters;
+                this.Is3D = mInfoWrapper.Is3D;
 
                 this.UpdateAudioStreams(mInfoWrapper);
                 this.UpdateSubtitles(mInfoWrapper);

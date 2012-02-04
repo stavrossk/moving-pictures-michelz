@@ -37,8 +37,10 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     private int _audioRate = 0;
     private int _audioChannels = 0;
     private int _numSubtitles = 0;
+    private int _multiview_count = 0;
     private string _aspectRatio = "";
     private string _videoCodec = string.Empty;
+    private string _multiview_layout = string.Empty;
     private string _audioCodec = string.Empty;
     private string _audioFormatProfile = string.Empty;
     private readonly List<AudioInfo> _audioInfo = new List<AudioInfo>();
@@ -67,6 +69,9 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     private bool _isPCM = false;  // RAW audio
     private bool _isTrueHD = false;  // TrueHD audio
     private bool _isDTSHD = false;  // DTSHD audio
+    
+    /// <summary>Is this a 3D Movie?</summary>
+    private bool _is3D = false;
     private int _duration = 0;
 
     private bool _hasSubtitles = false;
@@ -108,6 +113,8 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         int.TryParse(_mI.Get(StreamKind.Video, 0, "Width"), out _width);
         int.TryParse(_mI.Get(StreamKind.Video, 0, "Height"), out _height);
         int.TryParse(_mI.Get(StreamKind.General, 0, "TextCount"), out _numSubtitles);
+        int.TryParse(_mI.Get(StreamKind.Video, 0, "MultiView_Count"), out _multiview_count);
+        _multiview_layout = _mI.Get(StreamKind.Video, 0, "MultiView_Layout");
 
         string aspectStr = _mI.Get(StreamKind.Video, 0, "AspectRatio/String");
         if (aspectStr == "4/3" || aspectStr == "4:3")
@@ -168,6 +175,9 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
         _isMP2V = (_videoCodec.IndexOf("mpeg-2v") > -1);
         _isMP4V = (_videoCodec.IndexOf("fmp4") > -1); // add more
         _isWMV = (_videoCodec.IndexOf("wmv") > -1); // wmv3 = WMV9
+
+        _is3D = (_multiview_count > 1); // Probably 3D
+
         // missing cvid etc
 
         if (checkHasExternalSubtitles(strFile))
@@ -539,6 +549,12 @@ namespace MediaPortal.Plugins.MovingPictures.LocalMediaManagement
     public bool IsSDTV
     {
       get { return _isSDTV; }
+    }
+
+    /// <summary>Movie is 3D</summary>
+    public bool Is3D
+    {
+      get { return _is3D; }
     }
 
     public bool IsInterlaced
